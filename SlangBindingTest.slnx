@@ -1,3 +1,9 @@
 <Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
   <Project Path="SlangBindingTest/SlangBindingTest.csproj" />
+  <Project Path="SlangSharpAPI/SlangSharpAPI.vcxproj" Id="bbdce179-39c8-4f10-84ba-e762b5a70ab3" />
 </Solution>

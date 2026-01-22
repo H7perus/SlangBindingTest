@@ -1,315 +1,226 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
-using static System.Net.Mime.MediaTypeNames;
-
-
-
-public static class SlangConstants
-{
-    public const uint SLANG_API_VERSION = 0;
-}
+//using static SlangBindingTest.SlangBindingsOld;
 
 namespace SlangBindingTest
 {
-            
-
-
-    unsafe
     internal class SlangBindings
     {
         // Ensure calling convention matches native API
         [DllImport("slang", CallingConvention = CallingConvention.Cdecl)]
-        static extern int slang_createGlobalSession2(ref SlangGlobalSessionDesc desc, [MarshalAs(UnmanagedType.Interface)] out IGlobalSession outGlobalSession);
+        static extern SlangResult slang_createGlobalSession2(ref SlangGlobalSessionDesc desc, out IGlobalSessionPtr outGlobalSession);
 
-        // Return native HRESULT and write the IGlobalSession* into the out param
-        public static int createGlobalSession(out IGlobalSession session)
+        public static SlangResult createGlobalSession(out IGlobalSession outGlobalSession)
         {
             SlangGlobalSessionDesc desc = new SlangGlobalSessionDesc();
+            SlangResult result = slang_createGlobalSession2(ref desc, out IGlobalSessionPtr sessionPointer);
 
 
-            int hr = slang_createGlobalSession2(ref desc, out session);
-            return hr;
+            outGlobalSession = new IGlobalSession(sessionPointer);
+            return result;
         }
 
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern SlangResult IGlobalSession_createSession(ref IGlobalSessionPtr globalSession, ref SessionDesc desc, out ISessionPtr outSession);
+
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern SlangProfileID IGlobalSession_findProfile(ref IGlobalSessionPtr globalSession, [MarshalAs(UnmanagedType.LPStr)] string name);
+
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern IModulePtr ISession_loadModule(ref ISessionPtr session, [MarshalAs(UnmanagedType.LPStr)] string path, out ISlangBlob diagnosticBlob);
 
 
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern IntPtr ISlangBlob_getBufferPointer(ref ISlangBlobPtr blobPtr);
 
-        // Base interface
-        [ComImport]
-        [Guid("00000000-0000-0000-C000-000000000046")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface ISlangUnknown
+
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern SlangResult IModule_findEntryPointByName(ref IModulePtr module, [MarshalAs(UnmanagedType.LPStr)] string name, out IEntryPointPtr outEntryPoint);
+
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern int IModule_getDefinedEntryPointCount(ref IModulePtr module);
+
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern SlangResult IModule_getDefinedEntryPoint(ref IModulePtr module, int index, out IEntryPointPtr outEntryPoint);
+
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern SlangResult IComponentType_getTargetCode(ref IComponentTypePtr component, long target, out ISlangBlob outBlob);
+
+        [DllImport("SlangSharpAPI", CallingConvention = CallingConvention.Cdecl)]
+        static extern SlangResult IComponentType_link(ref IComponentTypePtr component, out IComponentTypePtr outLinked, out ISlangBlob diagnostics);
+
+        //enforce the return types for less mixup
+        public struct IGlobalSessionPtr
         {
-            // PreserveSig so managed signature matches native vtable exactly (SlangResult)
-            [PreserveSig]
-            int QueryInterface(ref Guid riid, out IntPtr ppvObject);
+            internal IntPtr ptr = 0;
 
-            [PreserveSig]
-            uint AddRef();
-
-            [PreserveSig]
-            uint Release();
+            public IGlobalSessionPtr() { }
+            public IGlobalSessionPtr(IntPtr p) { ptr = p; }
         }
-
-        [ComImport]
-        [Guid("5bc42be8-5c50-4929-9e5e-d15e7c24015f")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface IComponentType : ISlangUnknown
+        public class IGlobalSession
         {
-            /// <summary>
-            /// Get the runtime session that this component type belongs to.
-            /// </summary>
-            [PreserveSig]
-            [return: MarshalAs(UnmanagedType.Interface)]
-            ISession getSession();
+            //this is how we talk to the C++ side
+            IGlobalSessionPtr Ptr;
 
-            /// <summary>
-            /// Get the layout for this program for the chosen targetIndex.
-            /// </summary>
-            [PreserveSig]
-            IntPtr getLayout(
-                IntPtr targetIndex,
-                out ISlangBlob outDiagnostics);
+            public IGlobalSession(IGlobalSessionPtr globalSessionPointer)
+            {
+                Ptr = globalSessionPointer;
+            }
 
-            /// <summary>
-            /// Get the number of (unspecialized) specialization parameters for the component type.
-            /// </summary>
-            [PreserveSig]
-            IntPtr getSpecializationParamCount();
+            public SlangResult createSession(SessionDesc desc, out ISession outSession)
+            {
+                // Call the native function to create a session
+                SlangResult result = IGlobalSession_createSession(ref Ptr, ref desc, out ISessionPtr outSessionPtr);
 
-            /// <summary>
-            /// Get the compiled code for the entry point at entryPointIndex for the chosen targetIndex.
-            /// </summary>
-            [PreserveSig]
-            SlangResult getEntryPointCode(
-                long entryPointIndex,
-                long targetIndex,
-                [MarshalAs(UnmanagedType.Interface)] out ISlangBlob outCode,
-                [MarshalAs(UnmanagedType.Interface)] out ISlangBlob outDiagnostics);
+                outSession = new ISession(outSessionPtr);
+                return result;
+            }
 
-            /// <summary>
-            /// Get the compilation result as a file system.
-            /// </summary>
-            [PreserveSig]
-            SlangResult getResultAsFileSystem(
-                IntPtr entryPointIndex,
-                IntPtr targetIndex,
-                [MarshalAs(UnmanagedType.Interface)] out /*TODO:ISlangMutableFileSystem*/IntPtr outFileSystem);
+            public SlangProfileID findProfile(string name)
+            {
+                return IGlobalSession_findProfile(ref Ptr, name);
+            }
 
-            /// <summary>   
-            /// Compute a hash for the entry point at entryPointIndex for the chosen targetIndex.
-            /// </summary>
-            [PreserveSig]
-            void getEntryPointHash(
-                IntPtr entryPointIndex,
-                IntPtr targetIndex,
-                out ISlangBlob outHash);
 
-            /// <summary>
-            /// Specialize the component by binding its specialization parameters to concrete arguments.
-            /// </summary>
-            [PreserveSig]
-            SlangResult specialize(
-                IntPtr specializationArgs,
-                IntPtr specializationArgCount,
-                [MarshalAs(UnmanagedType.Interface)] out IComponentType outSpecializedComponentType,
-                out ISlangBlob outDiagnostics);
-
-            /// <summary>
-            /// Link this component type against all of its unsatisfied dependencies.
-            /// </summary>
-            [PreserveSig]
-            SlangResult link(
-                [MarshalAs(UnmanagedType.Interface)] out IComponentType outLinkedComponentType,
-                out ISlangBlob outDiagnostics);
-
-            /// <summary>
-            /// Get entry point 'callable' functions accessible through the/*TODO:ISlangSharedLibrary*/IntPtr interface.
-            /// </summary>
-            [PreserveSig]
-            SlangResult getEntryPointHostCallable(
-                int entryPointIndex,
-                int targetIndex,
-                [MarshalAs(UnmanagedType.Interface)] out/*TODO:ISlangSharedLibrary*/IntPtr outSharedLibrary,
-                out ISlangBlob outDiagnostics);
-
-            /// <summary>
-            /// Get a new ComponentType object that represents a renamed entry point.
-            /// </summary>
-            [PreserveSig]
-            SlangResult renameEntryPoint(
-                [MarshalAs(UnmanagedType.LPStr)] string newName,
-                [MarshalAs(UnmanagedType.Interface)] out IComponentType outEntryPoint);
-
-            /// <summary>
-            /// Link and specify additional compiler options when generating code from the linked program.
-            /// </summary>
-            [PreserveSig]
-            SlangResult linkWithOptions(
-                [MarshalAs(UnmanagedType.Interface)] out IComponentType outLinkedComponentType,
-                uint compilerOptionEntryCount,
-                IntPtr compilerOptionEntries,
-                out ISlangBlob outDiagnostics);
-
-            /// <summary>
-            /// Get the target code for the chosen targetIndex.
-            /// </summary>
-            [PreserveSig]
-            SlangResult getTargetCode(
-                IntPtr targetIndex,
-                [MarshalAs(UnmanagedType.Interface)] out ISlangBlob outCode,
-                [MarshalAs(UnmanagedType.Interface)] out ISlangBlob outDiagnostics);
-
-            /// <summary>
-            /// Get the target metadata for the chosen targetIndex.
-            /// </summary>
-            [PreserveSig]
-            SlangResult getTargetMetadata(
-                IntPtr targetIndex,
-                [MarshalAs(UnmanagedType.Interface)] out/*TODO: IMetadata*/IntPtr outMetadata,
-                out ISlangBlob outDiagnostics);
-
-            /// <summary>
-            /// Get the entry point metadata.
-            /// </summary>
-            [PreserveSig]
-            SlangResult getEntryPointMetadata(
-                IntPtr entryPointIndex,
-                IntPtr targetIndex,
-                [MarshalAs(UnmanagedType.Interface)] out/*TODO: IMetadata*/IntPtr outMetadata,
-                out ISlangBlob outDiagnostics);
         }
 
-        [ComImport]
-        [Guid("8F241361-F5BD-4CA0-A3AC-02F7FA2402B8")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface IEntryPoint : IComponentType
+        public struct ISessionPtr
         {
-            /// <summary>
-            /// Get function reflection information for this entry point.
-            /// </summary>
-            [PreserveSig]
-            IntPtr getFunctionReflection();
-        }
+            internal IntPtr ptr = 0;
 
-        [ComImport]
-        [Guid("0C720E64-8722-4D31-8990-638A98B1C279")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface IModule : IComponentType
+            public ISessionPtr() { }
+            public ISessionPtr(IntPtr p) { ptr = p; }
+        }
+        public class ISession
         {
-            [PreserveSig]
-            SlangResult findEntryPointByName([MarshalAs(UnmanagedType.LPStr)] string name, [MarshalAs(UnmanagedType.Interface)] out IEntryPoint outEntryPoint);
+            //this is how we talk to the C++ side
+            ISessionPtr Ptr;
+            public ISession(ISessionPtr sessionPointer)
+            {
+                Ptr = sessionPointer;
+            }
 
-            [PreserveSig]
-            int getDefinedEntryPointCount();
+            public IModule loadModule(string path, out ISlangBlob diagnosticBlob)
+            {
+                ISlangBlobPtr blobPtr;
+                return new IModule(ISession_loadModule(ref Ptr, path, out diagnosticBlob));
+            }
 
-            [PreserveSig]
-            SlangResult getDefinedEntryPoint(int index, [MarshalAs(UnmanagedType.Interface)] out IEntryPoint outEntryPoint);
 
-            [PreserveSig]
-            SlangResult serialize([MarshalAs(UnmanagedType.Interface)] out ISlangBlob outSerializedBlob);
-
-            [PreserveSig]
-            SlangResult writeToFile([MarshalAs(UnmanagedType.LPStr)] string fileName);
-
-            [PreserveSig]
-            [return: MarshalAs(UnmanagedType.LPStr)]
-            string getName();
-
-            [PreserveSig]
-            //[return: MarshalAs(UnmanagedType.LPStr)]
-            IntPtr getFilePath();
-
-            [PreserveSig]
-            [return: MarshalAs(UnmanagedType.LPStr)]
-            string getUniqueIdentity();
-
-            [PreserveSig]
-            SlangResult findAndCheckEntryPoint(
-                [MarshalAs(UnmanagedType.LPStr)] string name,
-                SlangStage stage,
-                [MarshalAs(UnmanagedType.Interface)] out IEntryPoint outEntryPoint,
-                out ISlangBlob outDiagnostics);
-
-            [PreserveSig]
-            int getDependencyFileCount();
-
-            [PreserveSig]
-            [return: MarshalAs(UnmanagedType.LPStr)]
-            string getDependencyFilePath(int index);
-
-            [PreserveSig]
-            IntPtr getModuleReflection();
-
-            [PreserveSig]
-            SlangResult disassemble(out ISlangBlob outDisassembledBlob);
         }
 
-        [ComImport]
-        [Guid("8BA5FB08-5195-40e2-AC58-0D989C3A0102")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface ISlangBlob : ISlangUnknown
+        public struct IComponentTypePtr
         {
-            /// <summary>
-            /// Get a pointer to the blob's data buffer.
-            /// </summary>
-            [PreserveSig]
-            IntPtr getBufferPointer();
-
-            /// <summary>
-            /// Get the size of the blob's data buffer in bytes.
-            /// </summary>
-            [PreserveSig]
-            UIntPtr getBufferSize();
+            internal IntPtr ptr = 0;
+            public IComponentTypePtr() { }
+            public IComponentTypePtr(IntPtr p) { ptr = p; }
         }
 
-
-
-
-        
-
-        // IGlobalSession
-        [ComImport]
-        [Guid("c140b5fd-0c78-452e-ba7c-1a1e70c7f71c")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface IGlobalSession : ISlangUnknown
+        public class IComponentType
         {
-            // PreserveSig to match vtable slot order & return type exactly.
-            [PreserveSig]
-            [return: MarshalAs(UnmanagedType.Error)]
-            int createSession(
-                ref SessionDesc desc,
-                [MarshalAs(UnmanagedType.Interface)] out ISession outSession);
+            protected IComponentTypePtr Ptr;
+            public IComponentType(IComponentTypePtr componentTypePointer)
+            {
+                Ptr = componentTypePointer;
+            }
+            public SlangResult getTargetCode(long target, out ISlangBlob outBlob)
+            {
+                SlangResult result = IComponentType_getTargetCode(ref Ptr, target, out outBlob);
+                return result;
+            }
 
-            // Native expects UTF-8 const char*; marshal as UTF-8 if runtime supports it.
-            // If your runtime does not support LPUTF8Str, call FindProfileRaw instead.
-            [PreserveSig]
-            SlangProfileID findProfile([MarshalAs(UnmanagedType.LPStr)] string name);
-
-            // Add more methods as needed...
+            public SlangResult link(out IComponentType returnedComponent, out ISlangBlob diagnostics)
+            {
+                SlangResult ret = IComponentType_link(ref Ptr, out IComponentTypePtr outComponent, out diagnostics);
+                returnedComponent = new IComponentType(outComponent);
+                return ret;
+            }
         }
 
-        // Stub interfaces for now
-        [ComImport]
-        [Guid("67618701-d116-468f-ab3b-474bedce0e3d")] // Placeholder GUID
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        public interface ISession : ISlangUnknown
+        [StructLayout(LayoutKind.Sequential)]
+        public struct IModulePtr
         {
-            [PreserveSig]
-            [return: MarshalAs(UnmanagedType.Interface)]
-            IGlobalSession getGlobalSession();
-
-            /** Load a module as it would be by code using `import`.
-             */
-            [PreserveSig]
-            [return:MarshalAs(UnmanagedType.Interface)]
-            IModule loadModule([MarshalAs(UnmanagedType.LPStr)] string moduleName, [MarshalAs(UnmanagedType.Interface)] out ISlangBlob outDiagnostics);
+            internal IntPtr ptr = 0;
+            public IModulePtr() { }
+            public IModulePtr(IntPtr p) { ptr = p; }
         }
 
+        public class IModule : IComponentType
+        {
+            public IModule(IModulePtr modulePointer) : base(new IComponentTypePtr(modulePointer.ptr)) { }
 
+            public IModulePtr GetPointer()
+            {
+                return new IModulePtr(Ptr.ptr);
+            }
+
+            //BROKEN, DO NOT USE. I think this is a problem on Slangs side
+            public SlangResult findEntryPointByName(string name, out IEntryPoint outEntryPoint)
+            {
+                IModulePtr selfPointer = GetPointer();
+
+                SlangResult result = IModule_findEntryPointByName(ref selfPointer, name, out IEntryPointPtr entryPointPtr);
+                outEntryPoint = new IEntryPoint(entryPointPtr);
+                return result;
+            }
+
+            public int getDefinedEntryPointCount()
+            {
+                IModulePtr selfPointer = GetPointer();
+                return IModule_getDefinedEntryPointCount(ref selfPointer);
+            }
+
+            public SlangResult getDefinedEntryPoint(int index, out IEntryPoint outEntryPoint)
+            {
+                IModulePtr selfPointer = GetPointer();
+                SlangResult result = IModule_getDefinedEntryPoint(ref selfPointer, index, out IEntryPointPtr entryPointPtr);
+                outEntryPoint = new IEntryPoint(entryPointPtr);
+                return result;
+            }
+        }
+
+        public struct IEntryPointPtr
+        {
+            internal IntPtr ptr = 0;
+            public IEntryPointPtr() { }
+            public IEntryPointPtr(IntPtr p) { ptr = p; }
+        }
+
+        public class IEntryPoint : IComponentType
+        {
+            public IEntryPoint(IEntryPointPtr entryPointPointer) : base(new IComponentTypePtr(entryPointPointer.ptr)) { }
+
+
+
+        }
+
+        public struct ISlangBlobPtr
+        {
+            internal IntPtr ptr = 0;
+            public ISlangBlobPtr() { }
+            public ISlangBlobPtr(IntPtr p) { ptr = p; }
+        }
+
+        public struct ISlangBlob
+        {
+            //this is how we talk to the C++ side
+            ISlangBlobPtr ptr;
+            public ISlangBlob(ISlangBlobPtr slangBlobPointer)
+            {
+                ptr = slangBlobPointer;
+            }
+
+            public bool isNull()
+            {
+                return ptr.ptr == IntPtr.Zero;
+            }
+
+            public IntPtr getBufferPointer()
+            {
+                return ISlangBlob_getBufferPointer(ref ptr);
+            }
+        }
     }
 }
