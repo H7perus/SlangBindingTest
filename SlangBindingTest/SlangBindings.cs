@@ -156,7 +156,7 @@ namespace SlangBindingTest
                 return new IModulePtr(Ptr.ptr);
             }
 
-            //BROKEN, DO NOT USE. I think this is a problem on Slangs side
+            //CAREFUL: You can not get target code for the returned entry point, you must first use IComponentType.link!
             public SlangResult findEntryPointByName(string name, out IEntryPoint outEntryPoint)
             {
                 IModulePtr selfPointer = GetPointer();
@@ -172,6 +172,7 @@ namespace SlangBindingTest
                 return IModule_getDefinedEntryPointCount(ref selfPointer);
             }
 
+            //CAREFUL: You can not get target code for the returned entry point, you must first use IComponentType.link!
             public SlangResult getDefinedEntryPoint(int index, out IEntryPoint outEntryPoint)
             {
                 IModulePtr selfPointer = GetPointer();
