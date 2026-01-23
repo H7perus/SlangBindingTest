@@ -1,4 +1,6 @@
-﻿using SlangBindingTest;
+﻿using OpenGLTriangle;
+using SlangBindingTest;
+using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Text;
 using static SlangBindingTest.SlangBindings;
@@ -43,14 +45,28 @@ sessionDesc.defaultMatrixLayoutMode = SlangMatrixLayoutMode.SLANG_MATRIX_LAYOUT_
 ISession session;
 globalSession.createSession(sessionDesc, out session);
 
-IModule testModule = session.loadModule("combined.slang", out ISlangBlob diagnosticBlob);
+IModule testModule = session.loadModule("../../../combined.slang", out ISlangBlob diagnosticBlob);
+printIfAvailable(diagnosticBlob);
+
 
 int entryCount = testModule.getDefinedEntryPointCount();
 
-SlangResult pleaseWork = testModule.findEntryPointByName("fragmentMain", out IEntryPoint testEntryPoint);
+testModule.findEntryPointByName("vertexMain", out IEntryPoint vertexEntry);
+vertexEntry.link(out IComponentType vertexComponent, out ISlangBlob vertDiag);
+vertexComponent.getTargetCode(0, out ISlangBlob vertexCode);
 
-SlangResult pleaseWorkAgain = testEntryPoint.link(out IComponentType finalEntryPls, out ISlangBlob diag);
+
+testModule.findEntryPointByName("fragmentMain", out IEntryPoint fragmentEntry);
+fragmentEntry.link(out IComponentType fragmentComponent, out ISlangBlob diag);
+fragmentComponent.getTargetCode(0, out ISlangBlob fragmentCode);
+
+string vertexShader = Marshal.PtrToStringAnsi(vertexCode.getBufferPointer());
+
+string fragmentShader = Marshal.PtrToStringAnsi(fragmentCode.getBufferPointer());
 
 
-finalEntryPls.getTargetCode(0, out ISlangBlob targetCode);
-printIfAvailable(targetCode);
+
+Console.WriteLine(vertexShader);
+Console.WriteLine(fragmentShader);
+
+TriangleRenderer.OpenWindow(vertexShader, fragmentShader);

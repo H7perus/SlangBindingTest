@@ -11,8 +11,6 @@ SlangResult createGlobalSession(slang::IGlobalSession** outGlobalSession)
 }
 
 
-
-
 // HERE COME THE IGLOBALSESSION METHODS
 
 __declspec(dllexport) SlangResult IGlobalSession_createSession(slang::IGlobalSession** globalSession, slang::SessionDesc const& desc, slang::ISession** outSession)
